@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GVQ - Auditoria de Romaneios</title>
+    <style>
+        :root { --verde-gvq: #00A859; --azul-gvq: #110145; --fundo: #f4f7f6; --borda: #dee2e6; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; }
+        body { background-color: var(--fundo); color: #333; }
+        .navbar { background-color: var(--azul-gvq); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2);}
+        .navbar a { color: var(--verde-gvq); text-decoration: none; font-weight: bold; margin-left: 15px; background: white; padding: 5px 10px; border-radius: 4px; font-size: 12px; }
+        .container { padding: 30px; max-width: 1600px; margin: 0 auto; }
+        .painel-aprovacao { background: white; padding: 20px; border-radius: 8px; margin-bottom: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border-left: 5px solid #ffc107; }
+        .btn-aprovar { background: var(--verde-gvq); color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn-negar { background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .tabela-container { background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); overflow-x: auto; margin-top: 20px;}
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th, td { padding: 12px 15px; border-bottom: 1px solid var(--borda); font-size: 14px; }
+        th { background-color: var(--azul-gvq); color: white; white-space: nowrap; }
+        tr:hover { background-color: rgba(0, 168, 89, 0.05); }
+        .btn-detalhes { background-color: var(--azul-gvq); color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
+        
+        /* Modal de Detalhes do Romaneio */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 999; padding: 15px; }
+        .modal-content { background: white; width: 100%; max-width: 700px; border-radius: 10px; padding: 20px; max-height: 90vh; overflow-y: auto; }
+        .resumo-modal { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 15px 0; padding: 15px; background: #f9f9f9; border-radius: 6px; border: 1px solid #ddd; }
+        .resumo-modal div { text-align: center; }
+        .resumo-modal span { display: block; font-size: 11px; color: #777; text-transform: uppercase; }
+        .resumo-modal strong { font-size: 16px; color: var(--azul-gvq); }
+        .pesos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 8px; margin-top: 15px; }
+        .peso-badge { background: #eef7f1; border: 1px solid var(--verde-gvq); color: #155724; padding: 8px; text-align: center; border-radius: 4px; font-size: 13px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <script>
+        // Trava do Escritório
+        const perfilLogado = localStorage.getItem('gvq_romaneio_perfil');
+        const loginLogado = localStorage.getItem('gvq_romaneio_login');
+        const usuarios = JSON.parse(localStorage.getItem('gvq_romaneio_usuarios')) || [];
+        let usuarioAtual = usuarios.find(u => u.login === loginLogado);
+
+        if (perfilLogado !== 'escritorio' || (usuarioAtual && !usuarioAtual.aprovado && loginLogado !== 'matheus.silveira')) {
+            window.location.href = 'index.html';
+        }
+    </script>
+
+    <div class="navbar">
+        <div style="font-weight: 900; font-size: 22px;">GVQ <span style="font-size: 14px; color: #ccc;">| AUDITORIA DE ROMANEIOS</span></div>
+        <div style="font-size: 14px;"><span id="nome-escritorio"></span> <a href="#" onclick="sair()">Sair</a></div>
+    </div>
+
+    <div class="container">
+        <!-- PAINEL DE APROVAÇÕES -->
+        <div id="secao-aprovacoes" class="painel-aprovacao" style="display:none;">
+            <h3 style="color: var(--azul-gvq); margin-bottom: 10px;">🛡️ Aprovação de Novos Escritórios</h3>
+            <table style="margin-top: 10px;">
+                <thead><tr><th>Nome</th><th>Login</th><th>Ações</th></tr></thead>
+                <tbody id="lista-pendentes"></tbody>
+            </table>
+        </div>
+
+        <h2 style="color: var(--azul-gvq); margin-bottom: 10px;">Romaneios Fechados (Faturamento)</h2>
+
+        <div class="tabela-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>OC</th>
+                        <th>Data Pesagem</th>
+                        <th>Comprador</th>
+                        <th>Pecuarista</th>
+                        <th>Gado (Ágio)</th>
+                        <th>Cabeças</th>
+                        <th>Peso Total (Bal.)</th>
+                        <th>Valor Final (R$)</th>
+                        <th>Fatiamento</th>
+                    </tr>
+                </thead>
+                <tbody id="corpo-tabela"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- MODAL DE DETALHES -->
+    <div class="modal-overlay" id="modal-detalhes">
+        <div class="modal-content">
+            <h3 style="color: var(--azul-gvq); border-bottom: 2px solid var(--verde-gvq); padding-bottom: 5px;">Relatório Analítico de Pesagem</h3>
+            
+            <div class="resumo-modal">
+                <div><span>Total Balança</span><strong id="m_total">0 kg</strong></div>
+                <div><span>Com Ágio (< 300)</span><strong id="m_agio" style="color:var(--verde-gvq);">0 kg</strong></div>
+                <div><span>Base (301-330)</span><strong id="m_base">0 kg</strong></div>
+                <div><span>Não Pago (> 330)</span><strong id="m_morto" style="color:#dc3545;">0 kg</strong></div>
+            </div>
+
+            <h4 style="margin-top: 15px; font-size: 14px; color: #555;">Pesos Individuais (Cabeça a Cabeça):</h4>
+            <div class="pesos-grid" id="lista-pesos-modal"></div>
+            
+            <button onclick="fecharModal()" style="width: 100%; margin-top: 20px; padding: 12px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">Fechar Relatório</button>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('nome-escritorio').innerText = localStorage.getItem('gvq_romaneio_logado');
+        function sair() { localStorage.clear(); window.location.href = 'index.html'; }
+
+        // APROVAÇÕES DE USUÁRIOS
+        function carregarPendentes() {
+            let users = JSON.parse(localStorage.getItem('gvq_romaneio_usuarios')) || [];
+            let pendentes = users.filter(u => u.perfil === 'escritorio' && !u.aprovado);
+            let secao = document.getElementById('secao-aprovacoes');
+            let tbodyPend = document.getElementById('lista-pendentes');
+            tbodyPend.innerHTML = '';
+
+            if (localStorage.getItem('gvq_romaneio_login') === 'matheus.silveira' && pendentes.length > 0) {
+                secao.style.display = 'block';
+                pendentes.forEach(p => {
+                    tbodyPend.innerHTML += `<tr><td>${p.nome}</td><td>${p.login}</td>
+                    <td><button class="btn-aprovar" onclick="mudarStatus('${p.login}', true)">Aprovar</button>
+                    <button class="btn-negar" onclick="mudarStatus('${p.login}', false)">Negar</button></td></tr>`;
+                });
+            } else { secao.style.display = 'none'; }
+        }
+
+        function mudarStatus(login, acao) {
+            let users = JSON.parse(localStorage.getItem('gvq_romaneio_usuarios')) || [];
+            if(acao) { users = users.map(u => u.login === login ? {...u, aprovado: true} : u); alert('Aprovado!'); } 
+            else { users = users.filter(u => u.login !== login); alert('Removido!'); }
+            localStorage.setItem('gvq_romaneio_usuarios', JSON.stringify(users));
+            carregarPendentes();
+        }
+
+        // TABELA DE ROMANEIOS
+        const romaneios = JSON.parse(localStorage.getItem('gvq_romaneios_salvos')) || [];
+
+        function renderizarTabela() {
+            const tbody = document.getElementById('corpo-tabela');
+            tbody.innerHTML = '';
+            
+            if(romaneios.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding: 30px; color:#999;">Nenhum romaneio recebido.</td></tr>';
+                return;
+            }
+
+            romaneios.slice().reverse().forEach((r, index) => {
+                let idReal = romaneios.length - 1 - index;
+                tbody.innerHTML += `
+                    <tr>
+                        <td><strong>${r.oc}</strong></td>
+                        <td>${r.data}</td>
+                        <td>${r.comprador}</td>
+                        <td>${r.pecuarista}</td>
+                        <td>${r.categoria} (${r.agio_txt})</td>
+                        <td><strong style="color:var(--verde-gvq);">${r.cabecas}</strong></td>
+                        <td>${r.kg_total}</td>
+                        <td><strong style="color:var(--azul-gvq);">${r.valor_final}</strong></td>
+                        <td><button class="btn-detalhes" onclick="abrirModal(${idReal})">Ver Fatiamento</button></td>
+                    </tr>
+                `;
+            });
+        }
+
+        function abrirModal(index) {
+            let r = romaneios[index];
+            document.getElementById('m_total').innerText = r.kg_total;
+            document.getElementById('m_agio').innerText = r.kg_agio;
+            document.getElementById('m_base').innerText = r.kg_base;
+            document.getElementById('m_morto').innerText = r.kg_morto;
+
+            let gridPesos = document.getElementById('lista-pesos-modal');
+            gridPesos.innerHTML = '';
+            r.pesos_individuais.forEach((peso, i) => {
+                gridPesos.innerHTML += `<div class="peso-badge"><span style="font-size:10px; color:#666; display:block;">Boi ${i+1}</span>${peso} kg</div>`;
+            });
+
+            document.getElementById('modal-detalhes').style.display = 'flex';
+        }
+        function fecharModal() { document.getElementById('modal-detalhes').style.display = 'none'; }
+
+        window.onload = () => { renderizarTabela(); carregarPendentes(); };
+    </script>
+</body>
+</html>
